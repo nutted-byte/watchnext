@@ -14,12 +14,17 @@ interface WatchHistoryItem {
   genres?: string[];
 }
 
+interface DismissedTitle {
+  title: string;
+  year?: number;
+}
+
 interface CandidateTitle {
   id: number;
   title: string;
   year?: number;
   overview: string;
-  genres?: number[];
+  genres?: string[];
   voteAverage?: number;
   guardianRating?: number;
 }
@@ -33,26 +38,42 @@ export interface ClaudeRecommendation {
 export async function getClaudeRecommendations(
   watchHistory: WatchHistoryItem[],
   watchlist: string[],
+  dismissed: DismissedTitle[],
   candidates: CandidateTitle[],
   limit: number = 20
 ): Promise<ClaudeRecommendation[]> {
+  // Sort watch history by rating (most impactful first)
+  const sortedHistory = [...watchHistory].sort((a, b) => b.rating - a.rating);
+
   // Prepare context for Claude
-  const watchedHighlyRated = watchHistory
+  const watchedHighlyRated = sortedHistory
     .filter((item) => item.rating >= 4)
-    .map((item) => `"${item.title}" (${item.year}) - ${item.rating}/5 stars${item.notes ? ` - Notes: ${item.notes}` : ''}`)
+    .map((item) => {
+      const genres = item.genres && item.genres.length > 0 ? ` [${item.genres.join(', ')}]` : '';
+      return `"${item.title}" (${item.year})${genres} - ${item.rating}/5 stars${item.notes ? ` - Notes: ${item.notes}` : ''}`;
+    })
     .join('\n');
 
-  const watchedLowRated = watchHistory
+  const watchedLowRated = sortedHistory
     .filter((item) => item.rating <= 2)
-    .map((item) => `"${item.title}" (${item.year}) - ${item.rating}/5 stars${item.notes ? ` - Notes: ${item.notes}` : ''}`)
+    .map((item) => {
+      const genres = item.genres && item.genres.length > 0 ? ` [${item.genres.join(', ')}]` : '';
+      return `"${item.title}" (${item.year})${genres} - ${item.rating}/5 stars${item.notes ? ` - Notes: ${item.notes}` : ''}`;
+    })
     .join('\n');
 
   const watchlistText = watchlist.join(', ');
 
+  const dismissedText = dismissed
+    .map((d) => `"${d.title}"${d.year ? ` (${d.year})` : ''}`)
+    .join(', ');
+
   const candidatesText = candidates
     .map(
-      (c, idx) =>
-        `${idx + 1}. [ID:${c.id}] "${c.title}" (${c.year}) - ${c.overview.slice(0, 150)}...${c.guardianRating ? ` | Guardian: ${c.guardianRating}/5★` : ''} | TMDB: ${c.voteAverage?.toFixed(1) || 'N/A'}/10`
+      (c, idx) => {
+        const genres = c.genres && c.genres.length > 0 ? ` [${c.genres.join(', ')}]` : '';
+        return `${idx + 1}. [ID:${c.id}] "${c.title}" (${c.year})${genres} - ${c.overview.slice(0, 150)}...${c.guardianRating ? ` | Guardian: ${c.guardianRating}/5★` : ''} | TMDB: ${c.voteAverage?.toFixed(1) || 'N/A'}/10`;
+      }
     )
     .join('\n');
 
@@ -67,14 +88,18 @@ ${watchedLowRated || 'None yet'}
 ## User's Watchlist:
 ${watchlistText || 'Empty'}
 
+## Previously Dismissed Recommendations (avoid similar):
+${dismissedText || 'None'}
+
 ## Candidate Titles to Evaluate:
 ${candidatesText}
 
 TASK: Recommend the top ${limit} titles from the candidate list that best match this user's taste. Consider:
 1. What patterns do you see in their highly-rated content? (themes, genres, tone, era)
-2. What did they dislike? (avoid similar titles)
-3. Guardian ratings (high Guardian scores often indicate quality)
-4. Diversity (don't just recommend one type)
+2. What did they dislike in low-rated content? (avoid similar titles)
+3. What recommendations did they dismiss? (avoid similar themes/genres/styles)
+4. Guardian ratings (high Guardian scores often indicate quality)
+5. Diversity (don't just recommend one type)
 
 Return ONLY a valid JSON array. No markdown, no explanations, just the JSON array.
 

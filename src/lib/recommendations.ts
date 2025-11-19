@@ -2,6 +2,7 @@ import { supabase } from '@/config/supabase';
 import { env } from '@/config/env';
 import type { TitleType } from '@/types';
 import { getClaudeRecommendations } from './claude-recommendations';
+import { getGenreNames } from './genres';
 
 interface RecommendationParams {
   userId: string;
@@ -203,13 +204,16 @@ async function getWatchHistoryForClaude(userId: string, type: TitleType) {
 
   if (!data) return [];
 
-  return data.map((item: any) => ({
-    title: item.titles.title,
-    rating: item.rating,
-    notes: item.notes,
-    year: item.titles.release_year,
-    genres: item.titles.genres,
-  }));
+  return data.map((item: any) => {
+    const genreIds = (item.titles.genres || []).map((g: string) => parseInt(g)).filter((id: number) => !isNaN(id));
+    return {
+      title: item.titles.title,
+      rating: item.rating,
+      notes: item.notes,
+      year: item.titles.release_year,
+      genres: getGenreNames(genreIds),
+    };
+  });
 }
 
 // Get watchlist titles for Claude
@@ -223,6 +227,24 @@ async function getWatchlistForClaude(userId: string, type: TitleType) {
   if (!data) return [];
 
   return data.map((item: any) => item.titles.title);
+}
+
+// Get dismissed recommendations for Claude (to avoid similar titles)
+async function getDismissedForClaude(userId: string, type: TitleType) {
+  const { data } = await supabase
+    .from('dismissed_recommendations')
+    .select('title, release_year')
+    .eq('user_id', userId)
+    .eq('title_type', type)
+    .order('dismissed_at', { ascending: false })
+    .limit(20); // Only recent dismissals matter
+
+  if (!data) return [];
+
+  return data.map((item: any) => ({
+    title: item.title,
+    year: item.release_year,
+  }));
 }
 
 // Generate recommendations for a user
@@ -320,13 +342,14 @@ export async function getRecommendations({
     .slice(0, 40)
     .map((c) => c.title);
 
-  // Get user's watch history and watchlist for Claude (limit to recent items)
-  const [watchHistory, watchlist] = await Promise.all([
+  // Get user's watch history, watchlist, and dismissed titles for Claude
+  const [watchHistory, watchlist, dismissed] = await Promise.all([
     getWatchHistoryForClaude(userId, type),
     getWatchlistForClaude(userId, type),
+    getDismissedForClaude(userId, type),
   ]);
 
-  // Prepare candidates for Claude (only top 40)
+  // Prepare candidates for Claude (only top 40, with genre names)
   const candidatesForClaude = topCandidates.map((title) => ({
     id: title.id,
     title: title.title || title.name,
@@ -334,15 +357,16 @@ export async function getRecommendations({
       ? new Date(title.release_date || title.first_air_date).getFullYear()
       : undefined,
     overview: title.overview,
-    genres: title.genre_ids,
+    genres: getGenreNames(title.genre_ids || []),
     voteAverage: title.vote_average,
     guardianRating: guardianRatings.get(title.id),
   }));
 
-  // Get Claude recommendations (now with 60% fewer tokens)
+  // Get Claude recommendations (with genre names and dismissed titles for better context)
   const claudeRecommendations = await getClaudeRecommendations(
     watchHistory.slice(0, 15), // Limit watch history to 15 most recent
     watchlist.slice(0, 10), // Limit watchlist to 10 items
+    dismissed.slice(0, 10), // Limit dismissed to 10 most recent
     candidatesForClaude,
     limit
   );
