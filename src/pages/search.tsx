@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { TitleCard } from '@/components/custom/title-card';
 import { useSearch } from '@/hooks/use-search';
 import { useAddToWatchlist, useIsInWatchlist } from '@/hooks/use-watchlist';

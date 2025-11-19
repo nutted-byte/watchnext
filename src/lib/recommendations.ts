@@ -48,7 +48,8 @@ async function getUserGenrePreferences(
   const genreWeights = new Map<number, number>();
 
   for (const item of history) {
-    const genres = item.titles.genres || [];
+    const titleData = item.titles as any;
+    const genres = titleData?.genres || [];
     const rating = item.rating;
 
     for (const genre of genres) {
@@ -149,7 +150,8 @@ async function getSimilarTitles(
   const titlesToCheck = highlyRated.slice(0, 3);
 
   for (const item of titlesToCheck) {
-    const tmdbId = item.titles.tmdb_id;
+    const titleData = item.titles as any;
+    const tmdbId = titleData.tmdb_id;
     const url = buildUrl(`/${mediaType}/${tmdbId}/similar`, {
       language: 'en-US',
       page: 1,
@@ -162,57 +164,11 @@ async function getSimilarTitles(
         similarTitles.push(...data.results.slice(0, 5)); // Top 5 from each
       }
     } catch (error) {
-      console.error(`Failed to fetch similar titles for ${item.titles.title}:`, error);
+      console.error(`Failed to fetch similar titles for ${titleData.title}:`, error);
     }
   }
 
   return similarTitles;
-}
-
-// Score a title based on various factors
-function scoreTitle(
-  title: any,
-  genrePreferences: GenrePreference[],
-  guardianRatingsMap: Map<number, number>
-): number {
-  let score = 0;
-
-  // 1. Genre matching (30% weight)
-  const titleGenres = title.genre_ids || [];
-  const genreMap = new Map(genrePreferences.map(g => [g.genreId, g.weight]));
-
-  for (const genreId of titleGenres) {
-    const weight = genreMap.get(genreId) || 0;
-    score += weight * 6; // Genre contribution
-  }
-
-  // 2. Guardian score (25% weight)
-  const guardianRating = guardianRatingsMap.get(title.id);
-  if (guardianRating) {
-    score += guardianRating * 12.5; // 4-5 star Guardian = +50-62.5 points
-  }
-
-  // 3. TMDB vote average (20% weight)
-  score += (title.vote_average / 10) * 20;
-
-  // 4. Popularity/recency balance (25% weight)
-  const releaseYear = title.release_date || title.first_air_date;
-  if (releaseYear) {
-    const year = new Date(releaseYear).getFullYear();
-    const currentYear = new Date().getFullYear();
-    const yearsAgo = currentYear - year;
-
-    // Boost recent titles, but don't penalize classics too much
-    if (yearsAgo <= 5) {
-      score += 25; // Recent release bonus
-    } else if (yearsAgo <= 10) {
-      score += 15;
-    } else if (yearsAgo <= 20) {
-      score += 5;
-    }
-  }
-
-  return score;
 }
 
 // Get Guardian ratings for titles

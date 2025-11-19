@@ -68,7 +68,7 @@ export function useMarkAsWatched() {
         rating,
         notes
       ),
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       toast.success(`Marked "${variables.title}" as watched`);
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['watch-history'] });
@@ -119,7 +119,7 @@ export function useRemoveFromHistory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ titleId, tmdbId }: { titleId: string; tmdbId: number }) =>
+    mutationFn: ({ titleId, tmdbId: _tmdbId }: { titleId: string; tmdbId: number }) =>
       removeFromHistory(user!.id, titleId),
     onSuccess: (_data, variables) => {
       toast.success('Removed from history');

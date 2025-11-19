@@ -53,7 +53,7 @@ export function useAddToWatchlist() {
       overview: string;
     }) =>
       addToWatchlist(user!.id, tmdbId, title, type, releaseYear, posterUrl, overview),
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       toast.success(`Added "${variables.title}" to watchlist`);
       // Invalidate watchlist and recommendations queries
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
@@ -78,7 +78,7 @@ export function useRemoveFromWatchlist() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ titleId, tmdbId }: { titleId: string; tmdbId: number }) =>
+    mutationFn: ({ titleId, tmdbId: _tmdbId }: { titleId: string; tmdbId: number }) =>
       removeFromWatchlist(user!.id, titleId),
     onSuccess: (_data, variables) => {
       toast.success('Removed from watchlist');

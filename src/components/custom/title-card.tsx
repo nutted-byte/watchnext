@@ -24,7 +24,7 @@ interface TitleCardProps {
 }
 
 export function TitleCard({
-  id,
+  id: _id,
   title,
   type,
   posterPath,

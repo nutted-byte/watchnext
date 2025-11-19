@@ -127,7 +127,7 @@ Return exactly ${limit} recommendations ordered by score (highest first).`;
     // Step 2: Fix each object individually using regex
     sanitizedJson = sanitizedJson.replace(
       /\{"titleId":\s*(\d+),\s*"score":\s*(\d+),\s*"reasoning":\s*"([^"}]*?)"\s*\}/g,
-      (match, titleId, score, reasoning) => {
+      (_match, titleId, score, reasoning) => {
         // Clean reasoning: remove any quotes/apostrophes
         const cleanReasoning = reasoning.replace(/['"]/g, '');
         return `{"titleId":${titleId},"score":${score},"reasoning":"${cleanReasoning}"}`;
