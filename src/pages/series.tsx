@@ -232,7 +232,7 @@ export function SeriesPage() {
                 </Button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-              {recommendations.map((title: any) => (
+                {recommendations.map((title: any) => (
                 <TitleCard
                   key={title.id}
                   id={title.id}
@@ -249,7 +249,7 @@ export function SeriesPage() {
                   isAddingToWatchlist={addToWatchlist.isPending}
                   isDismissing={dismissRecommendation.isPending}
                 />
-              ))}
+                ))}
               </div>
             </>
           ) : (
