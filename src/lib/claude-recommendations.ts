@@ -106,6 +106,13 @@ Return ONLY a valid JSON array. No markdown, no explanations, just the JSON arra
 Format each object exactly like this:
 {"titleId": 123, "score": 85, "reasoning": "Simple explanation without any quotes or special characters"}
 
+REASONING GUIDELINES:
+- Be specific: reference 1-2 titles from their watch history that make this a good match
+- Use format: Because you watched [Title] and rated it highly, you will enjoy...
+- Example: Because you watched The Wire and rated it highly this gritty crime drama has similar themes
+- Keep it concise (under 120 characters)
+- NO quotes, NO apostrophes in reasoning text
+
 CRITICAL RULES:
 1. Use double quotes for all JSON keys and string values
 2. In reasoning text: NO quotes, NO apostrophes, NO special characters
