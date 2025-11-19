@@ -1,0 +1,17 @@
+# WatchNext Project Rules
+
+## Deployment Rules
+- NEVER push to GitHub or trigger deployments without explicit user approval
+- User has a free Netlify account with limited build minutes
+- Always ask before running `git push` or any deployment commands
+- Inform user when changes are ready to deploy, but wait for confirmation
+
+## Cost Management
+- Claude API costs are a concern - always optimize for minimal token usage
+- Recommendations are cached for 24 hours to reduce API calls
+- Only send top 40 pre-filtered candidates to Claude API
+- Limit watch history and watchlist context sent to Claude
+
+## Development Workflow
+- Test changes locally first before deploying
+- User will manually trigger Netlify deployments when ready
