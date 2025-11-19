@@ -9,8 +9,9 @@ import { useWatchlist, useRemoveFromWatchlist, useAddToWatchlist } from '@/hooks
 import { useWatchHistory, useMarkAsWatched, useRemoveFromHistory } from '@/hooks/use-watch-history';
 import { useRecommendations } from '@/hooks/use-recommendations';
 import { useDismissRecommendation } from '@/hooks/use-dismissed-recommendations';
-import { Loader2, Trash2, Check } from 'lucide-react';
+import { Loader2, Trash2, Check, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 function WatchlistCard({ item }: { item: any }) {
   const [showWatchedDialog, setShowWatchedDialog] = useState(false);
@@ -150,6 +151,7 @@ export function SeriesPage() {
   const dismissRecommendation = useDismissRecommendation();
   const removeFromHistory = useRemoveFromHistory();
   const [selectedRecommendation, setSelectedRecommendation] = useState<any>(null);
+  const queryClient = useQueryClient();
 
   const handleAddToWatchlist = (title: any) => {
     addToWatchlist.mutate({
@@ -171,6 +173,11 @@ export function SeriesPage() {
       posterUrl: title.posterPath ? `https://image.tmdb.org/t/p/w342${title.posterPath}` : null,
       overview: title.overview || '',
     });
+  };
+
+  const handleRefreshRecommendations = () => {
+    queryClient.invalidateQueries({ queryKey: ['recommendations'] });
+    queryClient.refetchQueries({ queryKey: ['recommendations'] });
   };
 
   const handleClearHistory = () => {
@@ -211,7 +218,20 @@ export function SeriesPage() {
               <p className="text-muted-foreground mt-4">Loading recommendations...</p>
             </div>
           ) : recommendations && recommendations.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshRecommendations}
+                  disabled={isLoadingRecommendations}
+                  className="border-border hover:bg-muted transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh Recommendations
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {recommendations.map((title: any) => (
                 <TitleCard
                   key={title.id}
@@ -230,7 +250,8 @@ export function SeriesPage() {
                   isDismissing={dismissRecommendation.isPending}
                 />
               ))}
-            </div>
+              </div>
+            </>
           ) : (
             <div className="text-center py-20 text-muted-foreground space-y-3">
               <p className="text-lg">No recommendations yet</p>
