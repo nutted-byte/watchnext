@@ -315,32 +315,51 @@ export async function getRecommendations({
 
   // Pre-filter: Simple scoring to reduce candidates before Claude
   // This reduces API costs by 60-80%
-  const scoredCandidates = candidates.map((title) => {
-    let score = 0;
+  const scoredCandidates = candidates
+    .filter((title) => {
+      // Filter out low-quality titles (below 6.5/10 on TMDB)
+      if (title.vote_average < 6.5) return false;
+      // Require at least 50 votes to ensure quality
+      if ((title.vote_count || 0) < 50) return false;
+      return true;
+    })
+    .map((title) => {
+      let score = 0;
 
-    // TMDB vote average (0-20 points)
-    score += (title.vote_average / 10) * 20;
+      // TMDB vote average (0-20 points)
+      score += (title.vote_average / 10) * 20;
 
-    // Guardian rating bonus (0-25 points)
-    const guardianRating = guardianRatings.get(title.id);
-    if (guardianRating) {
-      score += guardianRating * 5;
-    }
+      // Guardian rating bonus (0-50 points) - INCREASED WEIGHT
+      const guardianRating = guardianRatings.get(title.id);
+      if (guardianRating) {
+        score += guardianRating * 10; // 4-5 star Guardian = +40-50 points
+        score += 20; // Bonus for having Guardian rating at all
+      }
 
-    // Genre match with user preferences (0-30 points)
-    const titleGenres = title.genre_ids || [];
-    const genreMatches = titleGenres.filter((g: number) =>
-      genrePreferences.some((p) => p.genreId === g)
-    ).length;
-    score += genreMatches * 10;
+      // Genre match with user preferences (0-30 points)
+      const titleGenres = title.genre_ids || [];
+      const genreMatches = titleGenres.filter((g: number) =>
+        genrePreferences.some((p) => p.genreId === g)
+      ).length;
+      score += genreMatches * 10;
 
-    return { title, score };
-  });
+      return { title, score, hasGuardian: !!guardianRating };
+    });
 
-  // Sort and take top 40 candidates (instead of all 100+)
-  const topCandidates = scoredCandidates
+  // Prioritize titles with Guardian ratings
+  const withGuardian = scoredCandidates.filter((c) => c.hasGuardian);
+  const withoutGuardian = scoredCandidates.filter((c) => !c.hasGuardian);
+
+  // Take top 30 with Guardian ratings, top 10 without (if needed)
+  const topWithGuardian = withGuardian
     .sort((a, b) => b.score - a.score)
-    .slice(0, 40)
+    .slice(0, 30);
+
+  const topWithoutGuardian = withoutGuardian
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(0, 40 - topWithGuardian.length));
+
+  const topCandidates = [...topWithGuardian, ...topWithoutGuardian]
     .map((c) => c.title);
 
   // Get user's watch history, watchlist, and dismissed titles for Claude
