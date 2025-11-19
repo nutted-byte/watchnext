@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { TitleCard } from '@/components/custom/title-card';
 import { StarRating } from '@/components/custom/star-rating';
 import { MarkWatchedDialog } from '@/components/custom/mark-watched-dialog';
+import { RecommendationDetailModal } from '@/components/custom/recommendation-detail-modal';
 import { useWatchlist, useRemoveFromWatchlist, useAddToWatchlist } from '@/hooks/use-watchlist';
 import { useWatchHistory, useMarkAsWatched, useRemoveFromHistory } from '@/hooks/use-watch-history';
 import { useRecommendations } from '@/hooks/use-recommendations';
@@ -148,6 +149,7 @@ export function FilmsPage() {
   const addToWatchlist = useAddToWatchlist();
   const dismissRecommendation = useDismissRecommendation();
   const removeFromHistory = useRemoveFromHistory();
+  const [selectedRecommendation, setSelectedRecommendation] = useState<any>(null);
 
   const handleAddToWatchlist = (title: any) => {
     addToWatchlist.mutate({
@@ -223,6 +225,7 @@ export function FilmsPage() {
                   guardianRating={title.guardianRating}
                   onAddToWatchlist={() => handleAddToWatchlist(title)}
                   onDismiss={() => handleDismiss(title)}
+                  onClick={() => setSelectedRecommendation(title)}
                   isAddingToWatchlist={addToWatchlist.isPending}
                   isDismissing={dismissRecommendation.isPending}
                 />
@@ -297,6 +300,21 @@ export function FilmsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {selectedRecommendation && (
+        <RecommendationDetailModal
+          open={!!selectedRecommendation}
+          onOpenChange={(open) => !open && setSelectedRecommendation(null)}
+          title={selectedRecommendation.title}
+          year={selectedRecommendation.releaseDate ? new Date(selectedRecommendation.releaseDate).getFullYear() : 0}
+          posterPath={selectedRecommendation.posterPath}
+          overview={selectedRecommendation.overview}
+          voteAverage={selectedRecommendation.voteAverage}
+          genreIds={selectedRecommendation.genreIds || []}
+          guardianRating={selectedRecommendation.guardianRating}
+          reasoning={selectedRecommendation.reasoning}
+        />
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ interface ScoredTitle {
   genreIds: number[];
   score: number;
   guardianRating?: number | null;
+  reasoning?: string;
 }
 
 // Get user's genre preferences based on watch history
@@ -390,6 +391,7 @@ export async function getRecommendations({
         genreIds: title.genre_ids || [],
         score: recommendation.score,
         guardianRating: guardianRatings.get(title.id) || null,
+        reasoning: recommendation.reasoning,
       };
     });
 
