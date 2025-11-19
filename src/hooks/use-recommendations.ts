@@ -10,7 +10,7 @@ export function useRecommendations(type: TitleType, limit = 20) {
     queryKey: ['recommendations', user?.id, type, limit],
     queryFn: () => getRecommendations({ userId: user!.id, type, limit }),
     enabled: !!user,
-    staleTime: 1000 * 60 * 60, // 1 hour - recommendations don't change often
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours - keep in cache for a day
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours - reduce API costs
+    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days - keep in cache for a week
   });
 }
