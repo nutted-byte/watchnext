@@ -6,8 +6,12 @@ import { Layout } from './components/custom/layout';
 import { LandingPage } from './pages/landing';
 import { OnboardingPage } from './pages/onboarding';
 import { HomePage } from './pages/home';
-import { FilmsPage } from './pages/films';
-import { SeriesPage } from './pages/series';
+import { FilmsWatchlistPage } from './pages/films/watchlist';
+import { FilmsHistoryPage } from './pages/films/history';
+import { FilmsRecommendationsPage } from './pages/films/recommendations';
+import { SeriesWatchlistPage } from './pages/series/watchlist';
+import { SeriesHistoryPage } from './pages/series/history';
+import { SeriesRecommendationsPage } from './pages/series/recommendations';
 import { SearchPage } from './pages/search';
 import { validateEnv } from './config/env';
 import { Loader2 } from 'lucide-react';
@@ -68,12 +72,24 @@ function AppRoutes() {
             }
           />
 
+          {/* Films routes */}
           <Route
             path="/films"
             element={
               isAuthenticated ? (
+                <Navigate to="/films/watchlist" replace />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/films/watchlist"
+            element={
+              isAuthenticated ? (
                 <Layout>
-                  <FilmsPage />
+                  <FilmsWatchlistPage />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -82,11 +98,75 @@ function AppRoutes() {
           />
 
           <Route
-            path="/series"
+            path="/films/history"
             element={
               isAuthenticated ? (
                 <Layout>
-                  <SeriesPage />
+                  <FilmsHistoryPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/films/recommendations"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <FilmsRecommendationsPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          {/* Series routes */}
+          <Route
+            path="/series"
+            element={
+              isAuthenticated ? (
+                <Navigate to="/series/watchlist" replace />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/series/watchlist"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <SeriesWatchlistPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/series/history"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <SeriesHistoryPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          <Route
+            path="/series/recommendations"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <SeriesRecommendationsPage />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

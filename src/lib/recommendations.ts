@@ -3,6 +3,7 @@ import { env } from '@/config/env';
 import type { TitleType } from '@/types';
 import { getClaudeRecommendations } from './claude-recommendations';
 import { getGenreNames } from './genres';
+import { getBestGuardianReview } from './guardian';
 
 interface RecommendationParams {
   userId: string;
@@ -26,6 +27,7 @@ interface ScoredTitle {
   genreIds: number[];
   score: number;
   guardianRating?: number | null;
+  guardianReviewUrl?: string | null;
   reasoning?: string;
 }
 
@@ -173,26 +175,90 @@ async function getSimilarTitles(
   return similarTitles;
 }
 
-// Get Guardian ratings for titles
-async function getGuardianRatings(titleIds: number[]): Promise<Map<number, number>> {
+// Get Guardian ratings and review URLs for titles
+async function getGuardianRatings(titleIds: number[]): Promise<Map<number, { rating: number; url: string | null }>> {
   if (titleIds.length === 0) return new Map();
 
   const { data } = await supabase
     .from('titles')
-    .select('tmdb_id, guardian_rating')
+    .select('tmdb_id, guardian_rating, guardian_review_url')
     .in('tmdb_id', titleIds)
     .not('guardian_rating', 'is', null);
 
-  const ratingsMap = new Map<number, number>();
+  const ratingsMap = new Map<number, { rating: number; url: string | null }>();
   if (data) {
     data.forEach((item: any) => {
       if (item.guardian_rating) {
-        ratingsMap.set(item.tmdb_id, item.guardian_rating);
+        ratingsMap.set(item.tmdb_id, {
+          rating: item.guardian_rating,
+          url: item.guardian_review_url || null
+        });
       }
     });
   }
 
   return ratingsMap;
+}
+
+// Enrich candidates with Guardian reviews (before Claude selection)
+async function enrichCandidatesWithGuardian(
+  candidates: any[],
+  type: TitleType,
+  guardianRatingsMap: Map<number, { rating: number; url: string | null }>
+): Promise<Array<any & { guardianRating: number | null; guardianReviewUrl: string | null }>> {
+  const enrichedCandidates = await Promise.all(
+    candidates.map(async (candidate) => {
+      // Check if already has Guardian rating from database
+      const existingData = guardianRatingsMap.get(candidate.id);
+      if (existingData) {
+        return {
+          ...candidate,
+          guardianRating: existingData.rating,
+          guardianReviewUrl: existingData.url
+        };
+      }
+
+      // Fetch Guardian review
+      try {
+        const title = candidate.title || candidate.name;
+        const releaseDate = candidate.release_date || candidate.first_air_date;
+        const year = releaseDate ? new Date(releaseDate).getFullYear() : undefined;
+        const guardianReview = await getBestGuardianReview(title, year, type);
+
+        if (guardianReview.rating) {
+          // Store in database for future use
+          await supabase
+            .from('titles')
+            .upsert({
+              tmdb_id: candidate.id,
+              title,
+              type,
+              release_year: year,
+              poster_url: candidate.poster_path ? `https://image.tmdb.org/t/p/w342${candidate.poster_path}` : null,
+              overview: candidate.overview,
+              genres: (candidate.genre_ids || []).map(String),
+              guardian_rating: guardianReview.rating,
+              guardian_review_url: guardianReview.url,
+              guardian_review_excerpt: guardianReview.excerpt,
+            }, {
+              onConflict: 'tmdb_id',
+            });
+
+          return {
+            ...candidate,
+            guardianRating: guardianReview.rating,
+            guardianReviewUrl: guardianReview.url
+          };
+        }
+      } catch (error) {
+        console.error(`Failed to fetch Guardian review for ${candidate.title || candidate.name}:`, error);
+      }
+
+      return { ...candidate, guardianRating: null, guardianReviewUrl: null };
+    })
+  );
+
+  return enrichedCandidates;
 }
 
 // Get user's watch history for Claude
@@ -268,34 +334,51 @@ export async function getRecommendations({
   // Get genre preferences for fallback discovery
   const genrePreferences = await getUserGenrePreferences(userId, type);
 
-  // If user has genre preferences, use discover API
+  // Calculate date range for recent releases (past 5 years)
+  const currentYear = new Date().getFullYear();
+  const minReleaseDate = `${currentYear - 5}-01-01`;
+  const dateParam = mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
+
+  // If user has genre preferences, use discover API (fetch multiple pages)
   if (genrePreferences.length > 0) {
     const genreIds = genrePreferences.map((g) => g.genreId).join(',');
 
-    const url = buildUrl(`/discover/${mediaType}`, {
-      language: 'en-US',
-      sort_by: 'vote_average.desc',
-      'vote_count.gte': 100,
-      with_genres: genreIds,
-      page: 1,
-    });
+    // Fetch 3 pages to get more candidates for strict filtering
+    // Prioritize recent releases from past 5 years
+    for (let page = 1; page <= 3; page++) {
+      const url = buildUrl(`/discover/${mediaType}`, {
+        language: 'en-US',
+        sort_by: 'popularity.desc', // Changed to popularity to get recent trending titles
+        'vote_count.gte': 50,
+        'vote_average.gte': 6.0,
+        with_genres: genreIds,
+        [dateParam]: minReleaseDate, // Only titles from past 5 years
+        page,
+      });
 
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      allCandidates.push(...data.results);
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        allCandidates.push(...data.results);
+      }
     }
   } else {
-    // No preferences - get popular titles
-    const url = buildUrl(`/${mediaType}/popular`, {
-      language: 'en-US',
-      page: 1,
-    });
+    // No preferences - get recent popular titles (fetch multiple pages)
+    for (let page = 1; page <= 3; page++) {
+      const url = buildUrl(`/discover/${mediaType}`, {
+        language: 'en-US',
+        sort_by: 'popularity.desc',
+        'vote_count.gte': 50,
+        'vote_average.gte': 6.0,
+        [dateParam]: minReleaseDate, // Only titles from past 5 years
+        page,
+      });
 
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      allCandidates.push(...data.results);
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        allCandidates.push(...data.results);
+      }
     }
   }
 
@@ -309,13 +392,8 @@ export async function getRecommendations({
 
   const candidates = Array.from(uniqueTitles.values());
 
-  // Get Guardian ratings for all candidates
-  const candidateIds = candidates.map((t) => t.id);
-  const guardianRatings = await getGuardianRatings(candidateIds);
-
-  // Pre-filter: Simple scoring to reduce candidates before Claude
-  // This reduces API costs by 60-80%
-  const scoredCandidates = candidates
+  // Pre-filter by TMDB quality before Guardian enrichment
+  const qualityCandidates = candidates
     .filter((title) => {
       // Filter out low-quality titles (below 6.5/10 on TMDB)
       if (title.vote_average < 6.5) return false;
@@ -323,44 +401,89 @@ export async function getRecommendations({
       if ((title.vote_count || 0) < 50) return false;
       return true;
     })
+    .sort((a, b) => b.vote_average - a.vote_average)
+    .slice(0, 100); // Top 100 by TMDB rating for Guardian enrichment
+
+  // For films: enrich with Guardian reviews and filter by 4-5 star ratings
+  // For series: skip Guardian enrichment (Guardian rarely reviews TV series with star ratings)
+  let enrichedCandidates: Array<any & { guardianRating: number | null; guardianReviewUrl: string | null }>;
+
+  if (type === 'film') {
+    // Get existing Guardian ratings from database
+    const candidateIds = qualityCandidates.map((t) => t.id);
+    const guardianRatings = await getGuardianRatings(candidateIds);
+
+    // Enrich top candidates with Guardian reviews (fetch fresh for titles without ratings)
+    console.log(`Enriching ${qualityCandidates.length} film candidates with Guardian reviews...`);
+    enrichedCandidates = await enrichCandidatesWithGuardian(
+      qualityCandidates,
+      type,
+      guardianRatings
+    );
+  } else {
+    // For series, add null Guardian data without API calls
+    console.log(`Skipping Guardian enrichment for ${qualityCandidates.length} series candidates (Guardian rarely reviews TV series)`);
+    enrichedCandidates = qualityCandidates.map(c => ({
+      ...c,
+      guardianRating: null,
+      guardianReviewUrl: null
+    }));
+  }
+
+  // STRICT FILTER: Only titles with 4-5 star Guardian ratings (films only)
+  // For series: use TMDB rating filter (7.5+)
+  const highQualityCandidates = enrichedCandidates
+    .filter((title) => {
+      if (type === 'film') {
+        return title.guardianRating && title.guardianRating >= 4;
+      } else {
+        // For series, require high TMDB rating
+        return title.vote_average >= 7.5;
+      }
+    })
     .map((title) => {
       let score = 0;
 
       // TMDB vote average (0-20 points)
       score += (title.vote_average / 10) * 20;
 
-      // Guardian rating bonus (0-50 points) - INCREASED WEIGHT
-      const guardianRating = guardianRatings.get(title.id);
-      if (guardianRating) {
-        score += guardianRating * 10; // 4-5 star Guardian = +40-50 points
-        score += 20; // Bonus for having Guardian rating at all
+      // Guardian rating (4-5 stars = +40-50 points) - films only
+      if (title.guardianRating) {
+        score += title.guardianRating * 10;
       }
 
-      // Genre match with user preferences (0-30 points)
+      // Genre match with user preferences (0-60 points) - HIGHEST WEIGHT
+      // Matches genres from titles you've rated highly
       const titleGenres = title.genre_ids || [];
       const genreMatches = titleGenres.filter((g: number) =>
         genrePreferences.some((p) => p.genreId === g)
       ).length;
-      score += genreMatches * 10;
+      score += genreMatches * 20; // 20 points per matching genre (up to 3 genres)
 
-      return { title, score, hasGuardian: !!guardianRating };
-    });
+      // Recency bias (0-20 points) - prioritize titles from past 3 years
+      const releaseDate = title.release_date || title.first_air_date;
+      if (releaseDate) {
+        const releaseYear = new Date(releaseDate).getFullYear();
+        const yearsSinceRelease = currentYear - releaseYear;
 
-  // Prioritize titles with Guardian ratings
-  const withGuardian = scoredCandidates.filter((c) => c.hasGuardian);
-  const withoutGuardian = scoredCandidates.filter((c) => !c.hasGuardian);
+        if (yearsSinceRelease <= 3) {
+          // Titles from past 3 years get bonus points (newer = more points)
+          score += Math.max(0, 20 - (yearsSinceRelease * 5)); // 20, 15, 10, 5 points
+        }
+      }
 
-  // Take top 30 with Guardian ratings, top 10 without (if needed)
-  const topWithGuardian = withGuardian
+      return { title, score };
+    })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 30);
+    .slice(0, 40); // Top 40 for Claude
 
-  const topWithoutGuardian = withoutGuardian
-    .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(0, 40 - topWithGuardian.length));
+  if (type === 'film') {
+    console.log(`Found ${highQualityCandidates.length} films with 4-5 star Guardian ratings`);
+  } else {
+    console.log(`Found ${highQualityCandidates.length} series with 7.5+ TMDB ratings`);
+  }
 
-  const topCandidates = [...topWithGuardian, ...topWithoutGuardian]
-    .map((c) => c.title);
+  const topCandidates = highQualityCandidates.map((c) => c.title);
 
   // Get user's watch history, watchlist, and dismissed titles for Claude
   const [watchHistory, watchlist, dismissed] = await Promise.all([
@@ -369,7 +492,7 @@ export async function getRecommendations({
     getDismissedForClaude(userId, type),
   ]);
 
-  // Prepare candidates for Claude (only top 40, with genre names)
+  // Prepare candidates for Claude (top 40 high-quality titles with genre names)
   const candidatesForClaude = topCandidates.map((title) => ({
     id: title.id,
     title: title.title || title.name,
@@ -379,7 +502,7 @@ export async function getRecommendations({
     overview: title.overview,
     genres: getGenreNames(title.genre_ids || []),
     voteAverage: title.vote_average,
-    guardianRating: guardianRatings.get(title.id),
+    guardianRating: title.guardianRating, // Films: 4-5 stars, Series: null
   }));
 
   // Get Claude recommendations (with genre names and dismissed titles for better context)
@@ -391,10 +514,10 @@ export async function getRecommendations({
     limit
   );
 
-  // Map Claude recommendations back to full title objects
+  // Map Claude recommendations back to full title objects (films: 4-5 Guardian stars, series: 7.5+ TMDB)
   const recommendationMap = new Map(claudeRecommendations.map((r) => [r.titleId, r]));
 
-  const scoredTitles: ScoredTitle[] = candidates
+  const scoredTitles: ScoredTitle[] = enrichedCandidates
     .filter((title) => recommendationMap.has(title.id))
     .map((title) => {
       const recommendation = recommendationMap.get(title.id)!;
@@ -409,11 +532,12 @@ export async function getRecommendations({
         voteAverage: title.vote_average,
         genreIds: title.genre_ids || [],
         score: recommendation.score,
-        guardianRating: guardianRatings.get(title.id) || null,
+        guardianRating: title.guardianRating, // Already enriched with 4-5 star ratings
+        guardianReviewUrl: title.guardianReviewUrl, // Guardian review URL
         reasoning: recommendation.reasoning,
       };
     });
 
-  // Sort by Claude's score (highest first)
+  // Sort by Claude's score (highest first) and return
   return scoredTitles.sort((a, b) => b.score - a.score);
 }

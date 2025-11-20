@@ -1,73 +1,98 @@
-# React + TypeScript + Vite
+# WatchNext
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Personalized TV & Film Recommendation Service**
 
-Currently, two official plugins are available:
+WatchNext answers "What should I watch next?" by learning from your viewing history and using AI to generate personalized recommendations.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- **AI-Powered Recommendations**: Claude AI analyzes your watch history to recommend films and TV series you'll genuinely enjoy
+- **Personalized Reasoning**: Each recommendation explains why it's a good match ("Because you watched X and rated it highly...")
+- **Guardian Integration**: Recommendations prioritize Guardian-reviewed content for quality curation
+- **Watch History**: Track what you've watched with 5-star ratings and notes
+- **Watchlist Management**: Save titles you want to watch with quick add/remove functionality
+- **Smart Search**: Search TMDB's extensive database of films and TV series
+- **Dismiss & Refresh**: Dismiss recommendations you're not interested in and refresh for new suggestions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- **Frontend**: React 19 + TypeScript + Vite
+- **UI**: shadcn/ui + Tailwind CSS v4
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Google OAuth via Supabase Auth
+- **AI**: Anthropic Claude (Haiku) for recommendations
+- **APIs**: TMDB API, The Guardian API
+- **Hosting**: Netlify
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Prerequisites
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Node.js 18+
+- Supabase account
+- TMDB API key
+- Guardian API key
+- Anthropic API key
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Environment Variables
+
+Create a `.env` file with:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_TMDB_API_KEY=your_tmdb_api_key
+VITE_GUARDIAN_API_KEY=your_guardian_api_key
+VITE_ANTHROPIC_API_KEY=your_anthropic_api_key
+VITE_APP_URL=http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Installation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Visit `http://localhost:5173`
+
+## Architecture Highlights
+
+### AI Recommendation System
+
+The recommendation engine uses a two-stage approach:
+
+1. **Pre-filtering**: Traditional scoring reduces candidates from 100+ to top 40 (70% cost reduction)
+   - TMDB quality threshold: 6.5+ rating, 50+ votes
+   - Guardian rating prioritization: 30 slots for Guardian-reviewed, 10 for others
+   - Genre matching with user preferences
+
+2. **Claude AI Analysis**: Claude Haiku analyzes the top 40 candidates
+   - Considers watch history (ratings, genres, notes)
+   - References specific titles user rated highly
+   - Avoids dismissed recommendations
+   - Generates personalized reasoning
+
+### Key Files
+
+- `src/lib/recommendations.ts` - Main recommendation algorithm
+- `src/lib/claude-recommendations.ts` - Claude AI integration
+- `src/hooks/use-recommendations.ts` - React Query hooks
+- `src/pages/films.tsx` & `src/pages/series.tsx` - Main UI pages
+
+## Recommendation Quality
+
+- Strict TMDB filtering (6.5+ rating, 50+ votes minimum)
+- Guardian-reviewed content heavily prioritized
+- "Because you watched X" reasoning for each recommendation
+- Dismissable recommendations stored to avoid repeats
+- Refresh button to clear cache and fetch new suggestions
+
+## Documentation
+
+- [Product Requirements Document](PRD.md) - Full product specification
+- [TODO List](TODO.md) - Development progress tracker
+
+## License
+
+MIT

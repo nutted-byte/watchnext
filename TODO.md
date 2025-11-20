@@ -30,6 +30,25 @@
   - [x] Similar titles API for highly-rated content
   - [x] Multi-factor scoring system
   - [x] Filtering of watched/watchlist titles
+- [x] **Integrate Claude AI for recommendations** (MAJOR UPDATE)
+  - [x] Replace rule-based recommendations with Claude Haiku analysis
+  - [x] Implement two-stage approach (pre-filter + AI analysis)
+  - [x] Add "Because you watched X" personalized reasoning
+  - [x] Optimize API costs by 70% with pre-filtering
+  - [x] Quality filtering: 6.5+ TMDB rating, 50+ votes minimum
+  - [x] Guardian prioritization: 30 slots with reviews, 10 without
+- [x] Dismiss recommendations functionality
+  - [x] Store dismissed recommendations in database
+  - [x] Exclude dismissed titles from future recommendations
+  - [x] Pass dismissed context to Claude for better suggestions
+- [x] Recommendation detail modal
+  - [x] Click recommendations to see full details
+  - [x] Display AI reasoning for each recommendation
+  - [x] Show poster, genres, ratings, and overview
+- [x] Refresh recommendations button
+  - [x] Clear React Query cache
+  - [x] Fetch new recommendations on demand
+  - [x] Fix JSX syntax errors in button implementation
 
 ## 📋 Pending
 

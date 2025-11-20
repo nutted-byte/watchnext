@@ -6,7 +6,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Star, Calendar, TrendingUp, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Star, Calendar, TrendingUp, Sparkles, ExternalLink } from 'lucide-react';
 import { getGenreNames } from '@/lib/genres';
 
 interface RecommendationDetailModalProps {
@@ -19,6 +20,7 @@ interface RecommendationDetailModalProps {
   voteAverage: number;
   genreIds: number[];
   guardianRating?: number | null;
+  guardianReviewUrl?: string | null;
   reasoning?: string;
 }
 
@@ -32,6 +34,7 @@ export function RecommendationDetailModal({
   voteAverage,
   genreIds,
   guardianRating,
+  guardianReviewUrl,
   reasoning,
 }: RecommendationDetailModalProps) {
   const genres = getGenreNames(genreIds);
@@ -101,6 +104,28 @@ export function RecommendationDetailModal({
             <h3 className="font-semibold">Overview</h3>
             <p className="text-muted-foreground leading-relaxed">{overview}</p>
           </div>
+
+          {/* Guardian Review Link */}
+          {guardianReviewUrl && (
+            <div>
+              <Button
+                variant="outline"
+                className="w-full"
+                asChild
+              >
+                <a
+                  href={guardianReviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Read Full Guardian Review
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

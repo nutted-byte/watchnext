@@ -81,15 +81,17 @@ A clean, intuitive web application that answers "What should I watch next?" by l
 ## 3. Technical Architecture
 
 ### 3.1 Tech Stack
-- **Frontend**: React (latest stable version)
+- **Frontend**: React 19 (latest stable version) + TypeScript + Vite
+- **UI Framework**: shadcn/ui + Tailwind CSS v4
 - **Hosting**: Netlify
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Google OAuth via Supabase Auth
 - **Version Control**: GitHub
 - **External APIs**:
-  - The Guardian Open Platform API
-  - TMDB API (for film/TV metadata)
-  - OCR API (Google Vision API or similar)
+  - **Anthropic Claude API** (Haiku model for AI recommendations)
+  - **The Guardian Open Platform API** (quality reviews)
+  - **TMDB API** (film/TV metadata and search)
+  - OCR API (Google Vision API or similar) - Future enhancement
 
 ### 3.2 Database Schema
 
@@ -402,9 +404,9 @@ All UI components will be built using **shadcn/ui** (MIT License - free and open
 
 ---
 
-## 7. Recommendation Algorithm (v1)
+## 7. Recommendation Algorithm
 
-### 7.1 Initial Approach (Simple but Effective)
+### 7.1 Current Approach (AI-Powered with Strict Quality Control)
 
 **Rating System**: 5-star ratings (aligns with Guardian review format)
 - 5 stars = Loved it
@@ -413,35 +415,166 @@ All UI components will be built using **shadcn/ui** (MIT License - free and open
 - 2 stars = Didn't enjoy it
 - 1 star = Disliked it
 
-**Factors (weighted)**:
-1. **Genre matching** (30%): Match genres from 4-5 star rated titles
-2. **Guardian score** (25%): Minimum threshold filter + boost for high scores (4-5 stars)
-3. **User rating patterns** (20%): Learn which Guardian ratings align with user's 4-5 star ratings
-4. **Similar titles** (25%): TMDB "similar to" recommendations for 4-5 star rated titles
-5. **Recency balance**: Prefer titles from last 5 years but include classics
+**Three-Stage Recommendation Engine**:
 
-**Filtering**:
-- Exclude already watched titles
-- Exclude titles in watchlist (separate view for watchlist)
-- Apply minimum Guardian score if set by user (default: 3+ stars)
-- Prioritize titles where Guardian rating is 4-5 stars
+#### Stage 1: Recent Candidate Discovery
+Fetch ~150-200 recent, quality candidates from TMDB
 
-**User Preference Learning**:
-- High rating correlation: If user consistently rates 5-star what Guardian rates 3-star, adjust weight
-- Genre patterns: Track which genres get 4-5 stars vs 1-2 stars
-- Year preferences: Does user prefer recent releases or classics?
+**TMDB Filters**:
+- **Recency Filter**: Only titles from past 5 years (2020-2025)
+- Sort by: `popularity.desc` (trending recent titles)
+- TMDB rating ≥ 6.0/10
+- Vote count ≥ 50 (ensures credibility)
+- Genre match: User's preferred genres (from 3+ star ratings)
+- Fetch 3 pages × multiple sources = ~150-200 candidates
+- Not in watch history, watchlist, or dismissed
 
-**Freshness**:
-- Recommendations refresh when new title rated (especially 4-5 or 1-2 stars)
-- Background refresh daily
-- "New recommendations" indicator
+**Why Recent Only?**
+- Users prefer contemporary content
+- Guardian reviews more available for recent titles
+- Better reflects current viewing preferences
 
-### 7.2 Future Enhancements
+#### Stage 2: Guardian Enrichment & Strict Quality Filter
+Enrich top 100 candidates with Guardian reviews, then apply strict 4-5 star filter
+
+**Guardian Enrichment**:
+1. Take top 100 candidates (by TMDB rating)
+2. Check database for existing Guardian ratings
+3. Fetch fresh Guardian reviews for titles without ratings
+4. Store all Guardian ratings in database for future use
+
+**STRICT FILTER: 4-5 Star Guardian Ratings ONLY**
+- **Filter out ALL titles without Guardian reviews**
+- **Filter out ALL titles with 1-3 star Guardian ratings**
+- Only 4-5 star Guardian-reviewed titles proceed
+
+**Scoring Factors** (for remaining 4-5 star titles):
+1. **Genre match** (0-60 points) - **HIGHEST WEIGHT**
+   - Based on genres from titles you've rated 3+ stars
+   - 20 points per matching genre (up to 3 top genres)
+   - Most personalized signal from your actual viewing habits
+2. **Guardian rating** (40-50 points):
+   - 4 stars = +40 points
+   - 5 stars = +50 points
+3. **Recency bias** (0-20 points):
+   - Current year: +20 points
+   - 1 year old: +15 points
+   - 2 years old: +10 points
+   - 3 years old: +5 points
+   - 4+ years old: 0 points
+4. **TMDB vote average** (0-20 points): Quality baseline
+
+**Result**: Top 40 high-quality, recent titles with 4-5 star Guardian ratings
+
+#### Stage 3: Claude AI Personalization
+Claude Haiku (fast, cost-effective) analyzes the top 40 candidates (all with 4-5 star Guardian ratings)
+
+**Input Context**:
+- User's watch history (up to 15 recent, with ratings and notes)
+- User's watchlist (up to 10 items)
+- Dismissed recommendations (up to 10 recent)
+- 40 candidate titles (all 4-5 star Guardian-reviewed, with genres and ratings)
+
+**Claude's Task**:
+1. Identify patterns in highly-rated content (themes, genres, tone, era)
+2. Identify what user dislikes from low-rated content
+3. Avoid titles similar to dismissed recommendations
+4. Ensure diversity (not just one genre or theme)
+5. Generate top 20 recommendations with scores (0-100)
+6. Provide personalized reasoning for each recommendation
+
+**Reasoning Format**:
+- **Personalized**: "Because you watched [Title] and rated it highly..."
+- **Specific**: References 1-2 titles from user's watch history
+- **Concise**: Under 120 characters
+- **Actionable**: Clear explanation of why it's a good match
+
+**Output**:
+```json
+[
+  {
+    "titleId": 12345,
+    "score": 92,
+    "reasoning": "Because you watched Breaking Bad and rated it highly this gritty crime drama has similar themes"
+  }
+]
+```
+
+**Final Result**: Top 20 personalized recommendations
+- All have 4-5 star Guardian ratings (quality guaranteed)
+- All from past 5 years (recency guaranteed)
+- Sorted by Claude's relevance score
+- Each includes AI-generated reasoning
+
+### 7.2 Key Design Decisions
+
+**Why 4-5 Star Guardian Ratings ONLY?**
+- Ensures consistently high-quality recommendations
+- Guardian reviews are curated, critical perspective (not user reviews)
+- Users prefer quality over quantity
+- Reduces decision fatigue - every recommendation is worth watching
+
+**Why Recent Titles Only (Past 5 Years)?**
+- User preference for contemporary content
+- Better Guardian review coverage for recent titles
+- Reflects current cultural context and viewing trends
+- Scoring still prioritizes past 3 years most heavily
+
+**Why Genre Match is Highest Weighted?**
+- Most reliable indicator of user preference
+- Based on actual viewing behavior (what you've rated 3+ stars)
+- More personal than generic popularity or ratings
+- Prevents recommendation fatigue from same type of content
+
+### 7.3 Cost Optimization
+
+**Three-stage approach reduces Claude API costs by 70-80%**:
+- Stage 1: TMDB filters ~150-200 candidates → 100 candidates
+- Stage 2: Guardian enrichment → 40 high-quality candidates (4-5 stars)
+- Stage 3: Claude analyzes only 40 candidates (vs 150+ without filtering)
+- Token savings: ~70-80% reduction in prompt size
+
+**Caching Strategy**:
+- React Query caches recommendations for 5 minutes
+- User can manually refresh via "Refresh Recommendations" button
+- Cache invalidates when user rates new title (significant preference signal)
+- Guardian ratings cached in database permanently (reduces API calls)
+
+### 7.4 Dismissed Recommendations
+
+**User Dismissal**:
+- User can dismiss recommendations they're not interested in
+- Dismissed titles stored in `dismissed_recommendations` table
+- Context passed to Claude: "Previously Dismissed Recommendations"
+- Claude avoids similar themes/genres/styles to dismissed titles
+
+**Benefits**:
+- Reduces repetitive recommendations
+- Helps Claude learn user's taste more precisely
+- Improves recommendation quality over time
+
+### 7.5 Implementation Location
+
+**File**: `src/lib/recommendations.ts`
+
+**Key Functions**:
+- `getRecommendations()` - Main entry point (lines 304-490)
+- `getUserGenrePreferences()` - Analyzes watch history for genre preferences (lines 34-73)
+- `enrichCandidatesWithGuardian()` - Fetches Guardian reviews (lines 200-250)
+- `getClaudeRecommendations()` - AI personalization (in `claude-recommendations.ts`)
+
+**UI Indicators**:
+- Films/Series recommendation pages show badges:
+  - "Recent releases prioritized (past 3 years)"
+  - "4-5 star Guardian ratings only"
+
+### 7.6 Future Enhancements
 - Collaborative filtering (what similar users enjoyed)
 - Mood-based recommendations
 - Viewing occasion tags (quick watch, weekend binge, etc.)
 - Director/actor preferences
 - Decade preferences
+- Upgrade to Claude Opus for deeper analysis (if budget allows)
 
 ---
 
